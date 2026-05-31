@@ -130,6 +130,7 @@ button{cursor:pointer;border:none;font-family:inherit;outline:none}
 .tier-bolt{position:absolute;inset:0;border-radius:15px;pointer-events:none;z-index:6;overflow:hidden;display:none}
 .tier-bolt svg{position:absolute;inset:0;width:100%;height:100%}
 .tier-bolt path{fill:none;stroke:#fffbe0;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 3px #ffe14d) drop-shadow(0 0 9px #ffcc00);opacity:0}
+.tier-bolt-canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:15px;pointer-events:none;z-index:6;display:none}
 .tier-flash{position:absolute;inset:0;border-radius:15px;pointer-events:none;z-index:5;background:radial-gradient(circle at 50% 0%,rgba(255,225,77,.6),rgba(255,204,0,.25) 45%,transparent 68%);opacity:0;display:none}
 @keyframes boltStrike{0%,6%{opacity:0}7%{opacity:1}9%{opacity:.25}11%{opacity:1}15%{opacity:0}100%{opacity:0}}
 @keyframes boltStrike2{0%,46%{opacity:0}47%{opacity:1}49%{opacity:.25}51%{opacity:1}55%{opacity:0}100%{opacity:0}}
@@ -162,14 +163,13 @@ button{cursor:pointer;border:none;font-family:inherit;outline:none}
 .plastic-card.tier-6{border-width:4px;animation:goldPulse 1.8s ease-in-out infinite}
 .plastic-card.tier-6 .tier-frame{border-width:4px;border-color:#e0b3ff;box-shadow:inset 0 0 30px rgba(224,179,255,.5),0 0 10px #e0b3ff88}
 .plastic-card.tier-6 .tier-shine{animation:tierSweep 1.6s linear infinite}
-/* 블랙: 광택 없음 — 천둥번개만 */
+/* 블랙: 광택 없음 — 강화 던전과 동일한 캔버스 천둥번개 */
 .plastic-card.tier-7{border-width:4px}
+.plastic-card.tier-7 .plastic-card-inner{background:#000}
 .plastic-card.tier-7 .tier-frame{border-width:4px;border-color:#ff3b3b;box-shadow:inset 0 0 32px rgba(255,42,42,.45),0 0 12px #ff2a2a88}
 .plastic-card.tier-7 .tier-mirror{animation:none!important;opacity:0!important}
-.plastic-card.tier-7 .tier-bolt{display:block}
-.plastic-card.tier-7 .tier-flash{display:block;animation:boltFlash 2.6s linear infinite}
-.plastic-card.tier-7 .tier-bolt path.b1{animation:boltStrike 2.6s linear infinite}
-.plastic-card.tier-7 .tier-bolt path.b2{animation:boltStrike2 2.6s linear infinite}
+.plastic-card.tier-7 .tier-bolt-canvas{display:block}
+.plastic-card.tier-7 .tier-flash{display:block;opacity:0}
 .card-overlay-msg{text-align:center;margin-top:16px}
 .card-overlay-title{font-size:18px;font-weight:900;color:#ffd700;margin-bottom:4px}
 .card-overlay-sub{font-size:11px;color:#4a7fc1;margin-bottom:12px}
@@ -337,18 +337,8 @@ button{cursor:pointer;border:none;font-family:inherit;outline:none}
         <div class="plastic-gloss"></div>
         <div class="plastic-holo"></div>
         <div class="tier-mirror" id="pc-tier-mirror"></div>
-        <div class="tier-flash"></div>
-        <div class="tier-bolt">
-          <svg viewBox="0 0 210 315" preserveAspectRatio="none">
-            <path class="b1" d="M120 -8 L96 60 L116 66 L78 150 L100 156 L58 250" style="stroke-width:4.5"/>
-            <path class="b1" d="M96 60 L62 92" style="stroke-width:2.6;animation-delay:.02s"/>
-            <path class="b1" d="M78 150 L114 180" style="stroke-width:2.6;animation-delay:.03s"/>
-            <path class="b1" d="M58 250 L42 244 M58 250 L74 258" style="stroke-width:3;animation-delay:.04s"/>
-            <path class="b2" d="M156 -8 L176 56 L156 62 L190 134 L168 140 L200 232" style="stroke-width:3.6"/>
-            <path class="b2" d="M176 56 L204 80" style="stroke-width:2;animation-delay:.02s"/>
-            <path class="b2" d="M190 134 L156 158" style="stroke-width:2;animation-delay:.03s"/>
-          </svg>
-        </div>
+        <div class="tier-flash" id="pc-bolt-flash"></div>
+        <canvas class="tier-bolt-canvas" id="pc-bolt-canvas"></canvas>
         <div class="plastic-edge"></div>
         <div class="tier-frame" id="pc-tier-frame"></div>
         <div class="tier-shine" id="pc-tier-shine"></div>
@@ -672,6 +662,7 @@ let ST={
   customCards:[],
   enhMode:false,enhRobot:null,enhRule:null,
   enhScore:0,enhIdx:0,enhWords:[],lightningInt:null,boltFrameTo:null,
+  cardLightInt:null,cardBoltTo:null,
   enhSRObj:null,enhSRActive:false,enhSRMode:false,enhBusy:false,
   enhTimerInt:null,enhTimeLeft:0,
 };
@@ -1228,6 +1219,11 @@ function showCardOverlay(robotId){
     enhBtn.style.display='none';
   }
   document.getElementById('card-overlay').style.display='flex';
+  if(enh>=7){
+    setTimeout(()=>{if(document.getElementById('card-overlay').style.display==='flex')startCardLightning();},60);
+  }else{
+    stopCardLightning();
+  }
   card.onmousemove=e=>{
     const r=card.getBoundingClientRect();
     const x=(e.clientX-r.left)/r.width-.5;
@@ -1237,6 +1233,7 @@ function showCardOverlay(robotId){
   card.onmouseleave=()=>card.style.transform='';
 }
 function closeCardOverlay(){
+  stopCardLightning();
   document.getElementById('card-overlay').style.display='none';
   go('collection');
 }
@@ -1466,13 +1463,10 @@ function endEnhDungeon(success){
     document.getElementById('enh-result-desc').textContent=ST.enhScore+'/'+ST.enhRule.count+' — 다시 도전하세요!';
   }
 }
-function startBlackLightning(){
-  stopBlackLightning();
-  const scr=document.getElementById('s-enhance');
-  const cv=document.getElementById('enh-bolt-canvas');
-  const flash=document.getElementById('enh-lightning');
-  if(!cv||!scr)return;
-  scr.classList.add('bolt-on');
+// 공통 번개 엔진: 캔버스/플래시/타이머 저장소를 받아 동일한 효과를 그린다
+// (메인 줄기 2~3개, 잔가지 빈도 0.65 — 강화 던전과 도감 카드가 동일)
+function runLightning(cv,flash,store,interval){
+  if(!cv)return;
   const ctx=cv.getContext('2d');
   function size(){const r=cv.getBoundingClientRect();cv.width=r.width||300;cv.height=r.height||500;}
   size();
@@ -1502,7 +1496,7 @@ function startBlackLightning(){
   }
   function strike(){
     const n=2+(Math.random()<.5?1:0);const bolts=[];
-    for(let k=0;k<n;k++){const main=makeBolt(40+Math.random()*(W()-80));bolts.push({main,branches:branchFrom(main)});}
+    for(let k=0;k<n;k++){const main=makeBolt(40+Math.random()*Math.max(20,W()-80));bolts.push({main,branches:branchFrom(main)});}
     const flicker=[1,0,.8,0,.6,0];let frame=0;
     (function render(){
       ctx.clearRect(0,0,W(),H());
@@ -1518,20 +1512,46 @@ function startBlackLightning(){
         });
       }
       frame++;
-      if(frame<flicker.length)ST.boltFrameTo=setTimeout(render,55);
+      if(frame<flicker.length)store.frameTo=setTimeout(render,55);
       else{ctx.clearRect(0,0,W(),H());if(flash)flash.style.opacity='0';}
     })();
   }
   strike();
-  ST.lightningInt=setInterval(strike,2200);
+  store.intId=setInterval(strike,interval||2200);
+}
+function stopLightning(cv,flash,store){
+  if(store.intId){clearInterval(store.intId);store.intId=null;}
+  if(store.frameTo){clearTimeout(store.frameTo);store.frameTo=null;}
+  if(cv){const c=cv.getContext('2d');c.clearRect(0,0,cv.width,cv.height);}
+  if(flash)flash.style.opacity='0';
+}
+const _enhStore={get intId(){return ST.lightningInt;},set intId(v){ST.lightningInt=v;},get frameTo(){return ST.boltFrameTo;},set frameTo(v){ST.boltFrameTo=v;}};
+const _cardStore={get intId(){return ST.cardLightInt;},set intId(v){ST.cardLightInt=v;},get frameTo(){return ST.cardBoltTo;},set frameTo(v){ST.cardBoltTo=v;}};
+
+function startBlackLightning(){
+  stopBlackLightning();
+  const scr=document.getElementById('s-enhance');
+  const cv=document.getElementById('enh-bolt-canvas');
+  const flash=document.getElementById('enh-lightning');
+  if(!cv||!scr)return;
+  scr.classList.add('bolt-on');
+  runLightning(cv,flash,_enhStore,2200);
 }
 function stopBlackLightning(){
-  if(ST.lightningInt){clearInterval(ST.lightningInt);ST.lightningInt=null;}
-  if(ST.boltFrameTo){clearTimeout(ST.boltFrameTo);ST.boltFrameTo=null;}
   const scr=document.getElementById('s-enhance');if(scr)scr.classList.remove('bolt-on');
-  const cv=document.getElementById('enh-bolt-canvas');
-  if(cv){const c=cv.getContext('2d');c.clearRect(0,0,cv.width,cv.height);}
-  const flash=document.getElementById('enh-lightning');if(flash)flash.style.opacity='0';
+  stopLightning(document.getElementById('enh-bolt-canvas'),document.getElementById('enh-lightning'),_enhStore);
+}
+
+// 도감 카드(블랙) 전용 번개 — 강화 던전과 동일한 캔버스 엔진
+function startCardLightning(){
+  stopCardLightning();
+  const cv=document.getElementById('pc-bolt-canvas');
+  const flash=document.getElementById('pc-bolt-flash');
+  if(!cv)return;
+  runLightning(cv,flash,_cardStore,2200);
+}
+function stopCardLightning(){
+  stopLightning(document.getElementById('pc-bolt-canvas'),document.getElementById('pc-bolt-flash'),_cardStore);
 }
 function closeEnhDungeon(){
   stopEnhRec();
